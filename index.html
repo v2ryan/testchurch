@@ -276,8 +276,8 @@
                 <ul style="margin-bottom: 0; padding-left: 20px;">
                     <li>本測驗共 <strong>80 題</strong>，約需 10-15 分鐘。</li>
                     <li>請依照您的<strong>直覺</strong>，拖曳滑桿進行評分。</li>
-                    <li><strong>1分</strong>：非常不同意 | <strong>5分</strong>：非常同意。</li>
-                    <li>預設值皆為 <strong>3 (普通)</strong>。</li>
+                    <li><strong>1分</strong>：非常不同意 | <strong>6分</strong>：非常同意。</li>
+                    <li>預設值皆為 <strong>4 (稍微同意)</strong>。</li>
                 </ul>
             </div>
 
@@ -288,7 +288,7 @@
     <div id="quiz-section">
         <!-- 移除原本的大標頭，改為簡單提示 -->
         <div style="text-align: center; margin-bottom: 20px; color: #7f8c8d;">
-            <small>請拖曳滑桿回答 (1-5)</small>
+            <small>請拖曳滑桿回答 (1-6)</small>
         </div>
 
         <form id="quizForm">
@@ -441,16 +441,17 @@
             let html = `<span class="question-text">${index + 1}. ${q.text}</span>`;
             
             // 使用 Range Slider 替代 Radio Buttons
+            // 修改：max="6", value="4"
             html += `
                 <div class="slider-container">
-                    <input type="range" id="q${q.id}" min="1" max="5" value="3" class="range-slider" oninput="updateSliderDisplay(this, ${q.id})">
+                    <input type="range" id="q${q.id}" min="1" max="6" value="4" class="range-slider" oninput="updateSliderDisplay(this, ${q.id})">
                     <div class="slider-labels">
                         <span>1 (非常不同意)</span>
-                        <span>5 (非常同意)</span>
+                        <span>6 (非常同意)</span>
                     </div>
                     <div class="current-value-display">
-                        <span id="score-disp-${q.id}" class="highlight-score">3</span>
-                        <span id="text-disp-${q.id}">普通</span>
+                        <span id="score-disp-${q.id}" class="highlight-score">4</span>
+                        <span id="text-disp-${q.id}">稍微同意</span>
                     </div>
                 </div>
             `;
@@ -468,17 +469,19 @@
         
         scoreDisplay.innerText = score;
         
+        // 修改：1-6 分制的文字描述
         let text = "";
         if(score === "1") text = "非常不同意";
         else if(score === "2") text = "不同意";
-        else if(score === "3") text = "普通";
-        else if(score === "4") text = "同意";
-        else if(score === "5") text = "非常同意";
+        else if(score === "3") text = "稍微不同意";
+        else if(score === "4") text = "稍微同意";
+        else if(score === "5") text = "同意";
+        else if(score === "6") text = "非常同意";
         
         textDisplay.innerText = text;
         
-        // 視覺回饋：改變顏色
-        if(score === "3") scoreDisplay.style.color = "#999";
+        // 視覺回饋：改變顏色 (預設值 4 為灰色，其他為亮色)
+        if(score === "4") scoreDisplay.style.color = "#999";
         else scoreDisplay.style.color = "var(--accent-color)";
     }
 
@@ -486,7 +489,7 @@
     // function updateProgress(...) {}
 
     function calculateResults() {
-        // 在滑桿模式下，所有題目預設為 3，因此不需要檢查是否未作答
+        // 在滑桿模式下，所有題目預設為 4
         
         // 計算分數
         let scores = { E: 0, S: 0, T: 0, J: 0 };
@@ -496,20 +499,27 @@
             const slider = document.getElementById(`q${q.id}`);
             let val = parseInt(slider.value);
             
-            // 反向題處理: 1->5, 2->4, 3->3, 4->2, 5->1
+            // 反向題處理
+            // 1-6 分制：Max(6) + Min(1) = 7
+            // 若選 6分(非常同意) -> 反向應為 1分
+            // 7 - 6 = 1. 正確。
             if (q.rev) {
-                val = 6 - val;
+                val = 7 - val;
             }
             
             scores[q.dim] += val;
         });
 
-        // 決定字母類型 (以 60 分為界線)
+        // 決定字母類型
+        // 總分計算：20題 * 6分 = 120 (Max)
+        // 20題 * 1分 = 20 (Min)
+        // 中位數：(120+20)/2 = 70
+        // 以 70 分為界線
         const typeStr = [
-            scores.E >= 60 ? 'E' : 'I',
-            scores.S >= 60 ? 'S' : 'N',
-            scores.T >= 60 ? 'T' : 'F',
-            scores.J >= 60 ? 'J' : 'P'
+            scores.E >= 70 ? 'E' : 'I',
+            scores.S >= 70 ? 'S' : 'N',
+            scores.T >= 70 ? 'T' : 'F',
+            scores.J >= 70 ? 'J' : 'P'
         ].join('');
 
         displayResults(typeStr, scores);
@@ -568,7 +578,7 @@
                     r: {
                         angleLines: { display: true },
                         suggestedMin: 20,
-                        suggestedMax: 100,
+                        suggestedMax: 120, // 修改：最大值改為 120
                         ticks: {
                             stepSize: 20,
                             backdropColor: 'transparent' // 隱藏刻度背景
