@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教會事奉適性測驗 (MBTI x 第一性原理)</title>
+    <!-- 引入 Chart.js 用於圖表顯示 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #e67e22;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 進度條 */
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: #ddd;
+            z-index: 1000;
+            display: none; /* 修改：預設隱藏，開始測驗後才顯示 */
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        header {
+            text-align: center;
+            margin-top: 30px;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        h1 { margin: 0 0 10px 0; color: var(--primary-color); }
+        p.subtitle { color: #7f8c8d; font-size: 1.1em; }
+        .instructions { font-size: 0.9em; color: #666; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            border-left: 4px solid transparent;
+            transition: transform 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+
+        /* 移除舊的 active-card 樣式，因為滑桿不需要 */
+        /* .card.active-card { border-left-color: var(--accent-color); } */
+
+        .question-text {
+            font-weight: 600;
+            font-size: 1.15em;
+            margin-bottom: 15px;
+            display: block;
+            color: var(--primary-color);
+        }
+
+        /* 滑桿樣式設計 */
+        .slider-container {
+            padding: 10px 0;
+        }
+
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: #e9ecef;
+            outline: none;
+            opacity: 0.9;
+            transition: opacity .2s;
+            margin: 15px 0;
+        }
+
+        .range-slider:hover {
+            opacity: 1;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            border: 2px solid white;
+        }
+
+        .range-slider::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            border: 2px solid white;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            color: #999;
+            font-size: 0.8em;
+            margin-top: -10px;
+        }
+
+        .current-value-display {
+            text-align: center;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-top: 10px;
+            font-size: 1.1em;
+            background: #f1f3f5;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .highlight-score {
+            color: var(--accent-color);
+            font-size: 1.3em;
+            margin-right: 5px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: background 0.3s;
+        }
+        .btn:hover { background-color: #34495e; }
+        .btn:disabled { background-color: #95a5a6; cursor: not-allowed; }
+
+        /* 結果頁面樣式 */
+        #result-section { display: none; animation: fadeIn 0.5s; }
+        
+        /* 起始頁面樣式 */
+        #start-section { display: block; animation: fadeIn 0.5s; text-align: center; }
+        #quiz-section { display: none; animation: fadeIn 0.5s; }
+
+        .result-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .type-badge {
+            display: inline-block;
+            background: var(--accent-color);
+            color: white;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 2.5em;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .type-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+            max-width: 600px; /* 新增：限制最大寬度，避免圖表過大 */
+            margin: 20px auto; /* 修改：使用 auto 讓左右置中 */
+        }
+
+        .analysis-box {
+            background: #f8f9fa;
+            border-left: 5px solid var(--primary-color);
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .analysis-box h3 { margin-top: 0; color: var(--primary-color); display: flex; align-items: center; }
+        .analysis-box h3::before { content: '💡'; margin-right: 10px; }
+
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .tag {
+            background: var(--primary-color);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #ffeeba;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 600px) {
+            .options { gap: 2px; } /* 舊樣式保留無妨 */
+        }
+    </style>
+</head>
+<body>
+
+<!-- 進度條預設隱藏 -->
+<div class="progress-container" id="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+</div>
+
+<div class="container">
+    
+    <!-- 新增：起始畫面 -->
+    <div id="start-section">
+        <div class="card" style="padding: 40px 20px;">
+            <h1 style="font-size: 2.5em; margin-bottom: 10px;">教會事奉適性測驗</h1>
+            <p class="subtitle" style="font-size: 1.2em; margin-bottom: 30px;">基於 MBTI 與 第一性原理分析</p>
+            
+            <div style="text-align: left; display: inline-block; background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; color: #555;">
+                <h4 style="margin-top: 0; color: var(--primary-color);">📝 測驗說明：</h4>
+                <ul style="margin-bottom: 0; padding-left: 20px;">
+                    <li>本測驗共 <strong>80 題</strong>，約需 10-15 分鐘。</li>
+                    <li>請依照您的<strong>直覺</strong>，拖曳滑桿進行評分。</li>
+                    <li><strong>1分</strong>：非常不同意 | <strong>5分</strong>：非常同意。</li>
+                    <li>預設值皆為 <strong>3 (普通)</strong>。</li>
+                </ul>
+            </div>
+
+            <button class="btn" onclick="startQuiz()">🚀 開始測驗</button>
+        </div>
+    </div>
+
+    <div id="quiz-section">
+        <!-- 移除原本的大標頭，改為簡單提示 -->
+        <div style="text-align: center; margin-bottom: 20px; color: #7f8c8d;">
+            <small>請拖曳滑桿回答 (1-5)</small>
+        </div>
+
+        <form id="quizForm">
+            <div id="questions-container">
+                <!-- 題目將由 JavaScript 動態生成 -->
+            </div>
+            <button type="button" class="btn" id="submitBtn" onclick="calculateResults()">查看分析結果</button>
+        </form>
+    </div>
+
+    <div id="result-section">
+        <div class="card">
+            <div class="result-header">
+                <div>您的測驗結果</div>
+                <div class="type-badge" id="mbti-type">----</div>
+                <div class="type-title" id="mbti-group-title"></div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="radarChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🛡️ 第一性原理深度分析</h3>
+            <div id="principle-analysis"></div>
+        </div>
+
+        <div class="card">
+            <h3>⛪ 教會事奉建議位置</h3>
+            <p style="color:#666; margin-bottom:15px;">基於您的認知功能優勢，以下是您最能發揮影響力且不易倦怠的領域：</p>
+            <div id="ministry-suggestions" class="tag-container"></div>
+        </div>
+        
+        <div id="warning-section"></div>
+
+        <button class="btn" onclick="window.scrollTo(0,0); location.reload();" style="background-color: #7f8c8d; margin-top:40px;">重新測驗</button>
+    </div>
+</div>
+
+<script>
+    // --- 題目資料庫 ---
+    // rev: true 代表反向題 (1分變5分, 5分變1分)
+    const questions = [
+        // E/I 維度 (1-20)
+        {id:1, text:"參加大型特會或營會後，我通常感到精力充沛，想找人續攤分享。", dim:"E", rev:false},
+        {id:2, text:"在小組聚會中，我傾向於主動發言並帶動氣氛。", dim:"E", rev:false},
+        {id:3, text:"我認為教會的「迎新接待」工作比「代禱事工」更適合我。", dim:"E", rev:false},
+        {id:4, text:"如果在教會遇到陌生人，我會主動上前攀談。", dim:"E", rev:false},
+        {id:5, text:"比起獨自靈修研經，我更喜歡參加讀書會或小組討論。", dim:"E", rev:false},
+        {id:6, text:"我常常在與弟兄姊妹的對話中，即興獲得新的服事靈感。", dim:"E", rev:false},
+        {id:7, text:"經過一週的工作，週末去教會與人互動是我的充電方式。", dim:"E", rev:false},
+        {id:8, text:"我喜歡成為教會活動的焦點或站在舞台上（如領會、敬拜主領）。", dim:"E", rev:false},
+        {id:9, text:"我不介意在聚會結束後長時間留在教會聊天。", dim:"E", rev:false},
+        {id:10, text:"當我有信仰疑問時，我傾向找人討論而非自己查資料。", dim:"E", rev:false},
+        {id:11, text:"在教會中，我更喜歡一對一的深入談話，而非群體寒暄。", dim:"E", rev:true},
+        {id:12, text:"聚會結束後，我通常需要一段獨處時間來恢復精力。", dim:"E", rev:true},
+        {id:13, text:"被點名在眾人面前分享見證會讓我感到非常消耗能量。", dim:"E", rev:true},
+        {id:14, text:"我認為安靜的退修會 (Retreat) 比熱鬧的佈道會更吸引我。", dim:"E", rev:true},
+        {id:15, text:"我喜歡默默在幕後操作音控或投影片，不希望被關注。", dim:"E", rev:true},
+        {id:16, text:"太多社交活動會讓我覺得教會生活很累。", dim:"E", rev:true},
+        {id:17, text:"我習慣先自己在心裡想清楚答案，才在小組中開口。", dim:"E", rev:true},
+        {id:18, text:"我比較喜歡透過文字（如寫代禱信）而非口語來表達關懷。", dim:"E", rev:true},
+        {id:19, text:"如果主日崇拜可以安靜地來、安靜地走，我會覺得很自在。", dim:"E", rev:true},
+        {id:20, text:"我更享受獨自默想經文的時光，勝過團體敬拜的喧鬧。", dim:"E", rev:true},
+        
+        // S/N 維度 (21-40)
+        {id:21, text:"我喜歡講道內容包含具體的生活應用步驟，而非抽象的神學概念。", dim:"S", rev:false},
+        {id:22, text:"在籌備教會活動時，我會先確認預算、場地和流程細節。", dim:"S", rev:false},
+        {id:23, text:"我相信過去成功的服事經驗值得被複製和傳承。", dim:"S", rev:false},
+        {id:24, text:"閱讀聖經時，我更關注歷史背景、地理位置和具體事件。", dim:"S", rev:false},
+        {id:25, text:"我擅長處理教會的行政、庶務或愛宴的實際安排。", dim:"S", rev:false},
+        {id:26, text:"我喜歡具體、摸得著的服事成果（如探訪人數、奉獻金額）。", dim:"S", rev:false},
+        {id:27, text:"關於教會異象，我更在意「現在該做什麼」而不是「十年後會怎樣」。", dim:"S", rev:false},
+        {id:28, text:"我對於按部就班地執行既定儀式感到安心。", dim:"S", rev:false},
+        {id:29, text:"我擅長觀察弟兄姊妹的實際需求（如誰沒吃飯、誰臉色不好）。", dim:"S", rev:false},
+        {id:30, text:"我喜歡指令明確的服事崗位，不喜歡模糊不清的任務。", dim:"S", rev:false},
+        {id:31, text:"我常覺得教會目前的做法太過保守，需要創新和變革。", dim:"S", rev:true},
+        {id:32, text:"讀經時，我喜歡探索經文背後的隱喻和象徵意義。", dim:"S", rev:true},
+        {id:33, text:"我喜歡參與教會的策略規劃，構思未來的發展藍圖。", dim:"S", rev:true},
+        {id:34, text:"我常在聽道時「神遊」，聯想到許多與主題相關的其他可能性。", dim:"S", rev:true},
+        {id:35, text:"我對重複性的行政工作容易感到厭倦。", dim:"S", rev:true},
+        {id:36, text:"我重視信仰的「大圖畫」(Big Picture) 勝過字句的細節。", dim:"S", rev:true},
+        {id:37, text:"我常憑直覺認為某項事工會成功，即使目前數據不足。", dim:"S", rev:true},
+        {id:38, text:"我喜歡討論神學理論、預定論或末世論等抽象議題。", dim:"S", rev:true},
+        {id:39, text:"我擅長激勵他人看見未來的希望和願景。", dim:"S", rev:true},
+        {id:40, text:"我常覺得「傳統」是需要被挑戰和更新的。", dim:"S", rev:true},
+
+        // T/F 維度 (41-60)
+        {id:41, text:"在處理教會衝突時，我認為釐清「誰對誰錯」比「維護關係」更重要。", dim:"T", rev:false},
+        {id:42, text:"我認為教會的資源分配應該基於效率和效益分析。", dim:"T", rev:false},
+        {id:43, text:"即使會讓人受傷，我仍認為牧者應該誠實地指出會友的罪。", dim:"T", rev:false},
+        {id:44, text:"我擅長分析事工失敗的原因，並提出客觀的改進建議。", dim:"T", rev:false},
+        {id:45, text:"在小組討論中，我喜歡進行理性的辯證和真理的探討。", dim:"T", rev:false},
+        {id:46, text:"我認為教會的規章制度必須被嚴格執行，不能因人情而破例。", dim:"T", rev:false},
+        {id:47, text:"當別人向我訴苦時，我傾向於提供解決方案而非純粹的情感支持。", dim:"T", rev:false},
+        {id:48, text:"我不介意擔任教會中需要「扮黑臉」的紀律角色。", dim:"T", rev:false},
+        {id:49, text:"我認為講道應該邏輯嚴密、論證清晰。", dim:"T", rev:false},
+        {id:50, text:"做決策時，我會優先考慮這是否符合真理原則，而非大家是否開心。", dim:"T", rev:false},
+        {id:51, text:"我非常在意教會群體的和諧氣氛，會盡力避免衝突。", dim:"T", rev:true},
+        {id:52, text:"我做決定時，首要考慮的是這會如何影響弟兄姊妹的感受。", dim:"T", rev:true},
+        {id:53, text:"我擅長察覺他人的情緒，並給予同理心的安慰。", dim:"T", rev:true},
+        {id:54, text:"我認為「愛」與「恩典」比「律法」與「原則」更重要。", dim:"T", rev:true},
+        {id:55, text:"為了不讓某人感到受傷，我可以接受稍微調整規則。", dim:"T", rev:true},
+        {id:56, text:"在小組中，我致力於讓每個人都感到被接納和被愛。", dim:"T", rev:true},
+        {id:57, text:"我很容易被感性的見證或敬拜氛圍打動流淚。", dim:"T", rev:true},
+        {id:58, text:"我認為事工的成效不應只看數字，更要看人的生命改變。", dim:"T", rev:true},
+        {id:59, text:"我常因為擔心得罪人而不敢說出反對意見。", dim:"T", rev:true},
+        {id:60, text:"我覺得教會像一個家，講求的是關係而非講道理。", dim:"T", rev:true},
+
+        // J/P 維度 (61-80)
+        {id:61, text:"我習慣在週六就準備好主日要穿的衣服和奉獻。", dim:"J", rev:false},
+        {id:62, text:"參與服事時，我希望早在一個月前就收到排班表。", dim:"J", rev:false},
+        {id:63, text:"我不喜歡聚會流程臨時變動或講道超時。", dim:"J", rev:false},
+        {id:64, text:"我喜歡設定屬靈目標（如讀經進度）並嚴格執行。", dim:"J", rev:false},
+        {id:65, text:"做事工規劃時，我習慣列出詳細的 To-Do List 並逐一完成。", dim:"J", rev:false},
+        {id:66, text:"我認為「準時」是基督徒品格的重要表現。", dim:"J", rev:false},
+        {id:67, text:"在會議中，我希望盡快做出結論，而不是無止盡地討論。", dim:"J", rev:false},
+        {id:68, text:"看到教會物品擺放凌亂會讓我很想去整理。", dim:"J", rev:false},
+        {id:69, text:"我喜歡事情都在掌控之中，不喜歡突發狀況。", dim:"J", rev:false},
+        {id:70, text:"我是一個任務導向者，事情做完才能安心休息。", dim:"J", rev:false},
+        {id:71, text:"我喜歡聖靈隨風而行的帶領，不介意聚會流程臨時更改。", dim:"J", rev:true},
+        {id:72, text:"我常在最後一刻才準備好小組分享的內容，但通常表現不錯。", dim:"J", rev:true},
+        {id:73, text:"我覺得服事過程中的樂趣比準時完成任務更重要。", dim:"J", rev:true},
+        {id:74, text:"我擅長應對教會突發的危機或臨時的變動。", dim:"J", rev:true},
+        {id:75, text:"我不喜歡被過多的條條框框或服事班表束縛。", dim:"J", rev:true},
+        {id:76, text:"我常常在截止日期前才會有靈感（如寫講章或見證）。", dim:"J", rev:true},
+        {id:77, text:"我容易被新鮮的事物吸引，可能會中途改變事工方向。", dim:"J", rev:true},
+        {id:78, text:"我認為保持開放的態度比堅持原定計劃更屬靈。", dim:"J", rev:true},
+        {id:79, text:"我喜歡輕鬆、隨興的團契氛圍，不喜歡太嚴肅的議程。", dim:"J", rev:true},
+        {id:80, text:"對我來說，靈活應變是服事中不可或缺的能力。", dim:"J", rev:true}
+    ];
+
+    // --- 程式邏輯 ---
+
+    // 新增：開始測驗功能
+    function startQuiz() {
+        document.getElementById('start-section').style.display = 'none';
+        document.getElementById('quiz-section').style.display = 'block';
+        document.getElementById('progress-container').style.display = 'block';
+        window.scrollTo(0, 0);
+    }
+
+    function init() {
+        const container = document.getElementById('questions-container');
+        questions.forEach((q, index) => {
+            const card = document.createElement('div');
+            card.className = 'card';
+
+            let html = `<span class="question-text">${index + 1}. ${q.text}</span>`;
+            
+            // 使用 Range Slider 替代 Radio Buttons
+            html += `
+                <div class="slider-container">
+                    <input type="range" id="q${q.id}" min="1" max="5" value="3" class="range-slider" oninput="updateSliderDisplay(this, ${q.id})">
+                    <div class="slider-labels">
+                        <span>1 (非常不同意)</span>
+                        <span>5 (非常同意)</span>
+                    </div>
+                    <div class="current-value-display">
+                        <span id="score-disp-${q.id}" class="highlight-score">3</span>
+                        <span id="text-disp-${q.id}">普通</span>
+                    </div>
+                </div>
+            `;
+            
+            card.innerHTML = html;
+            container.appendChild(card);
+        });
+    }
+
+    // 更新滑桿顯示文字
+    function updateSliderDisplay(slider, id) {
+        const score = slider.value;
+        const scoreDisplay = document.getElementById(`score-disp-${id}`);
+        const textDisplay = document.getElementById(`text-disp-${id}`);
+        
+        scoreDisplay.innerText = score;
+        
+        let text = "";
+        if(score === "1") text = "非常不同意";
+        else if(score === "2") text = "不同意";
+        else if(score === "3") text = "普通";
+        else if(score === "4") text = "同意";
+        else if(score === "5") text = "非常同意";
+        
+        textDisplay.innerText = text;
+        
+        // 視覺回饋：改變顏色
+        if(score === "3") scoreDisplay.style.color = "#999";
+        else scoreDisplay.style.color = "var(--accent-color)";
+    }
+
+    // 滑桿模式下不需要 updateProgress，因為預設都有值
+    // function updateProgress(...) {}
+
+    function calculateResults() {
+        // 在滑桿模式下，所有題目預設為 3，因此不需要檢查是否未作答
+        
+        // 計算分數
+        let scores = { E: 0, S: 0, T: 0, J: 0 };
+
+        questions.forEach(q => {
+            // 直接讀取 Range Input 的數值
+            const slider = document.getElementById(`q${q.id}`);
+            let val = parseInt(slider.value);
+            
+            // 反向題處理: 1->5, 2->4, 3->3, 4->2, 5->1
+            if (q.rev) {
+                val = 6 - val;
+            }
+            
+            scores[q.dim] += val;
+        });
+
+        // 決定字母類型 (以 60 分為界線)
+        const typeStr = [
+            scores.E >= 60 ? 'E' : 'I',
+            scores.S >= 60 ? 'S' : 'N',
+            scores.T >= 60 ? 'T' : 'F',
+            scores.J >= 60 ? 'J' : 'P'
+        ].join('');
+
+        displayResults(typeStr, scores);
+    }
+
+    function displayResults(type, scores) {
+        document.getElementById('quiz-section').style.display = 'none';
+        document.getElementById('result-section').style.display = 'block';
+        window.scrollTo(0, 0);
+
+        document.getElementById('mbti-type').innerText = type;
+        
+        // 產生圖表
+        generateChart(scores);
+        
+        // 產生文字分析
+        generateAnalysis(type, scores);
+    }
+
+    function generateChart(scores) {
+        const ctx = document.getElementById('radarChart').getContext('2d');
+        
+        // 為了讓圖表顯示四個軸向的拉扯，我們將分數正規化
+        // 中心點為 60。 
+        // E分數: 顯示 E vs I 的傾向。
+        // 但 Radar Chart 需要多個軸。
+        // 我們這裡設計 4 個軸：外向(E), 實感(S), 理性(T), 判斷(J)
+        // 數值範圍 20-100。數值越低代表越靠近中心(反向特質)，越高代表越強烈。
+        // 這是一種呈現方式。另一種是 8 軸呈現。
+        // 為了簡單直觀，我們用雙向 Bar Chart 概念轉換成 Radar 或者直接用分數。
+        // 這裡採用 4 軸雷達圖，但標籤標註兩端。
+
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: [
+                    ['外向 (E)', 'vs 內向'], 
+                    ['實感 (S)', 'vs 直覺'], 
+                    ['理性 (T)', 'vs 情感'], 
+                    ['判斷 (J)', 'vs 感知']
+                ],
+                datasets: [{
+                    label: '您的人格傾向強度',
+                    data: [scores.E, scores.S, scores.T, scores.J],
+                    fill: true,
+                    backgroundColor: 'rgba(230, 126, 34, 0.2)',
+                    borderColor: 'rgba(230, 126, 34, 1)',
+                    pointBackgroundColor: 'rgba(230, 126, 34, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(230, 126, 34, 1)'
+                }]
+            },
+            options: {
+                scales: {
+                    r: {
+                        angleLines: { display: true },
+                        suggestedMin: 20,
+                        suggestedMax: 100,
+                        ticks: {
+                            stepSize: 20,
+                            backdropColor: 'transparent' // 隱藏刻度背景
+                        },
+                        pointLabels: {
+                            font: { size: 14, weight: 'bold', family: 'Helvetica' },
+                            color: '#2c3e50'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    function generateAnalysis(type, scores) {
+        let groupTitle = "";
+        let analysisText = "";
+        let suggestionHtml = "";
+        
+        // Keirsey 氣質分類邏輯
+        let group = "";
+        if (type.includes('S') && type.includes('J')) group = "SJ";
+        else if (type.includes('S') && type.includes('P')) group = "SP";
+        else if (type.includes('N') && type.includes('F')) group = "NF";
+        else if (type.includes('N') && type.includes('T')) group = "NT";
+
+        // 內容生成
+        if (group === "SJ") {
+            groupTitle = "護衛者 (SJ) - 教會的基石";
+            analysisText = `
+                <p><strong>核心強項：</strong>穩定性、執行力、細節管理 (Si/Te/Fe)。您的大腦傾向於透過重複驗證的程序來獲得安全感。</p>
+                <p><strong>第一性原理洞察：</strong>教會的運作不僅需要屬靈的火熱，更需要物理層面的秩序。您的價值在於將抽象的異象轉化為可執行的 SOP。不要因為自己缺乏「天馬行空的創意」而感到自卑，因為沒有您的穩定執行，所有的復興都只是曇花一現。</p>
+                <p><strong>潛在盲點：</strong>過度依賴「過去怎麼做」，可能會在教會需要轉型時成為無意識的阻力。</p>
+            `;
+            suggestionHtml = `
+                <span class="tag">行政總務</span>
+                <span class="tag">財務管理</span>
+                <span class="tag">愛宴安排</span>
+                <span class="tag">兒童主日學 (需耐心與重複性)</span>
+                <span class="tag">實質關懷 (提供物資協助)</span>
+            `;
+        } else if (group === "SP") {
+            groupTitle = "探險家 (SP) - 教會的行動隊";
+            analysisText = `
+                <p><strong>核心強項：</strong>行動力、危機處理、即興反應 (Se/Ti/Fi)。您的大腦對環境的變化極度敏感，善於活在當下。</p>
+                <p><strong>第一性原理洞察：</strong>教會常被誤認為是靜態的場所，但實際上是一個充滿突發狀況的有機體。您的價值在於「危機處理」。當音響壞掉、流程出包或需要臨時上街佈道時，您是唯一能享受混亂並從中找到樂趣的人。</p>
+                <p><strong>潛在盲點：</strong>冗長的策略規劃會議會讓您感到窒息，請避免承接需要長時間獨自坐著的文書工作。</p>
+            `;
+            suggestionHtml = `
+                <span class="tag">外展佈道</span>
+                <span class="tag">大型活動機動組</span>
+                <span class="tag">敬拜團 (樂手)</span>
+                <span class="tag">青少年事工</span>
+                <span class="tag">破冰遊戲帶領</span>
+            `;
+        } else if (group === "NF") {
+            groupTitle = "理想主義者 (NF) - 教會的靈魂";
+            analysisText = `
+                <p><strong>核心強項：</strong>激勵人心、同理心、意義連結 (Ni/Ne/Fi/Fe)。您的大腦透過情感共鳴與未來願景來理解世界。</p>
+                <p><strong>第一性原理洞察：</strong>人是尋求意義的生物。您的角色是教會的「靈魂工程師」。您能敏銳察覺講台上的真理是否真的進入了會友的心中。您不是來執行任務的，您是來連結生命的。不要強迫自己去處理冰冷的數據，那會耗盡您的愛心。</p>
+                <p><strong>潛在盲點：</strong>容易將事工的成敗與個人的價值掛鉤，需學習將「事」與「人」適度分離，建立情緒界線。</p>
+            `;
+            suggestionHtml = `
+                <span class="tag">牧養關懷</span>
+                <span class="tag">小組長</span>
+                <span class="tag">敬拜主領 (營造氛圍)</span>
+                <span class="tag">新朋友跟進</span>
+                <span class="tag">輔導諮商</span>
+                <span class="tag">文字見證</span>
+            `;
+        } else if (group === "NT") {
+            groupTitle = "理性者 (NT) - 教會的建築師";
+            analysisText = `
+                <p><strong>核心強項：</strong>策略規劃、神學架構、邏輯分析 (Ti/Te/Ni/Ne)。您的大腦透過分析與解構來尋求真理。</p>
+                <p><strong>第一性原理洞察：</strong>教會常缺乏系統性的策略思維。您的存在是為了「優化系統」。您可以看見目前的牧養模式哪裡缺乏效率，或神學教導哪裡有邏輯漏洞。請勇敢地提出建言，但要記得「真理需要用愛心包裝」，否則會被誤解為傲慢。</p>
+                <p><strong>潛在盲點：</strong>容易對缺乏邏輯的情感表達感到不耐煩，需理解「情感」也是人類存在的真實數據之一。</p>
+            `;
+            suggestionHtml = `
+                <span class="tag">講道教導</span>
+                <span class="tag">查經班講師</span>
+                <span class="tag">教會章程制定</span>
+                <span class="tag">植堂策略規劃</span>
+                <span class="tag">長執會決策</span>
+                <span class="tag">影音系統架構</span>
+            `;
+        }
+
+        document.getElementById('mbti-group-title').innerText = groupTitle;
+        document.getElementById('principle-analysis').innerHTML = analysisText;
+        document.getElementById('ministry-suggestions').innerHTML = suggestionHtml;
+
+        // I 型人特別警示
+        const warningDiv = document.getElementById('warning-section');
+        if (type.startsWith('I')) {
+            warningDiv.innerHTML = `
+                <div class="warning-box">
+                    <strong>⚠️ 給內向者 (I) 的特別提醒：</strong><br>
+                    依據能量守恆原理，教會的高密度社交對您是耗能的。請務必保留「低社交密度」的服事空間（如幕後、代禱、文字），避免為了迎合「熱心」的期待而過度承擔接待工作。這不是靈命問題，是生理機制問題。
+                </div>
+            `;
+        } else {
+            warningDiv.innerHTML = "";
+        }
+    }
+
+    // 初始化頁面
+    window.onload = init;
+
+</script>
+
+</body>
+</html>
